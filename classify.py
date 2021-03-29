@@ -1,12 +1,31 @@
 #!/usr/bin/env python3
-
+import math
 import tkinter as tk
+import json
+
+import numpy as np
 from PIL import Image, ImageTk
+
+WHEELS_TURNING_ANGLE = 45
+THROTTLE_MAX_RADIUS = 120
 
 LABEL_MAP = {0: "Bad",
              1: "Good",
              255: "Unlabelled"}
 tk_pack_options={"expand":1,"fill":tk.BOTH}
+
+def findFirstNonClassified(data):
+    for i, rec in enumerate(data):
+        if rec[1] == 255:
+            return i
+    return 0
+
+def polar2cartesian(length, angle):
+    angle = math.radians(angle)
+    x = length*math.cos(angle)
+    y = length*math.sin(angle)
+    return x,y
+
 
 class App(tk.Frame):
     def __init__(self, master=None, data=None):
@@ -14,13 +33,14 @@ class App(tk.Frame):
         self.frame_increment = tk.IntVar()
         self.data = data
         self.loaded_img = None
+        self.loaded_json = None
         self.img_class = tk.StringVar()
         self.img_class.trace_add('write', self.__refresh_label_color)
         self.img_fname = tk.StringVar()
         self.canvas = None
         self.class_label = None
         self.step_scale = None
-        self.FRAME_COUNT = 0
+        self.FRAME_COUNT = findFirstNonClassified(self.data)
         self.pack(**tk_pack_options)
         img_frame = tk.Frame(self)
         img_frame.pack(side=tk.TOP,**tk_pack_options)
@@ -59,6 +79,11 @@ class App(tk.Frame):
         self.loaded_img = ImageTk.PhotoImage(Image.open(fname, "r"))
         self.img_fname.set(fname)
 
+    def __load_json(self):
+        fname = self.data[self.FRAME_COUNT][2]
+        with open(fname) as f:
+            self.loaded_json = json.load(f)
+
     def __refresh_label_color(self,var,indx,mode):
         label = self.img_class.get().lower()
         color = "red" if label == "bad" else "green" if label == "good" else "yellow"
@@ -67,8 +92,17 @@ class App(tk.Frame):
     def __show_frame(self):
         # global lmain
         self.__load_image()
+        self.__load_json()
         self.img_class.set(LABEL_MAP[self.data[self.FRAME_COUNT][1]])
         self.canvas.create_image(0, 0, anchor='nw', image=self.loaded_img)
+        x1 = 80
+        y1 = 120
+        throttle = self.loaded_json["user/throttle"]*THROTTLE_MAX_RADIUS
+        angle = self.loaded_json["user/angle"]*WHEELS_TURNING_ANGLE
+        x2, y2 = polar2cartesian(throttle,angle)
+        x2,y2 = y2+x1,y1-x2
+
+        self.canvas.create_line(x1, y1, x2, y2,  fill="blue", width = 2, arrow=tk.LAST)
 
     def call_next_frame(self):
         increment = self.frame_increment.get()
@@ -164,16 +198,21 @@ if __name__ == '__main__':
     try:
         img_dir = sys.argv[1]  #'test_data/img/'
     except IndexError:
-        img_dir = input("dataset directory>")
+        img_dir = 'data'
+        #img_dir = input("dataset directory>")
+
     img_dir = img_dir[:-1] if img_dir[-1] == '/' else img_dir # remove the last '/' character if present
     dir_path,img_dir = os.path.split(img_dir)
     os.chdir(dir_path)
     fimage_names = glob.glob(img_dir + '/*[0-9]*.jpg')
     fimage_names.sort(key=sort_key_fname_number)
 
+    fimages_json = glob.glob(img_dir + '/record_[0-9]*.json')
+    fimages_json.sort(key=sort_key_fname_number)
+
     labels = load_labeldoc(img_dir+'_filter.csv', fimage_names)
 
-    data = [list(d) for d in zip(fimage_names, labels)]
+    data = [list(d) for d in zip(fimage_names, labels, fimages_json)]
     del fimage_names, labels
     root = tk.Tk()
     root.geometry('400x300')
