@@ -2,6 +2,7 @@
 import math
 import tkinter as tk
 import json
+import os.path
 
 import numpy as np
 from PIL import Image, ImageTk
@@ -31,7 +32,7 @@ class App(tk.Frame):
     def __init__(self, master=None, data=None):
         tk.Frame.__init__(self, master)
         self.frame_increment = tk.IntVar()
-        self.data = data
+        self.datadir, self.data = data
         self.loaded_img = None
         self.loaded_json = None
         self.img_class = tk.StringVar()
@@ -75,12 +76,13 @@ class App(tk.Frame):
         self.canvas.config(width=self.loaded_img.width(), height=self.loaded_img.height())
 
     def __load_image(self):
-        fname = self.data[self.FRAME_COUNT][0]
+        #fname = self.data[self.FRAME_COUNT][0]
+        fname = os.path.join(self.datadir, self.loaded_json["cam/image_array"])
         self.loaded_img = ImageTk.PhotoImage(Image.open(fname, "r"))
         self.img_fname.set(fname)
 
     def __load_json(self):
-        fname = self.data[self.FRAME_COUNT][2]
+        fname = self.data[self.FRAME_COUNT][0]
         with open(fname) as f:
             self.loaded_json = json.load(f)
 
@@ -91,8 +93,8 @@ class App(tk.Frame):
 
     def __show_frame(self):
         # global lmain
-        self.__load_image()
         self.__load_json()
+        self.__load_image()
         self.img_class.set(LABEL_MAP[self.data[self.FRAME_COUNT][1]])
         self.canvas.create_image(0, 0, anchor='nw', image=self.loaded_img)
         x1 = 80
@@ -102,7 +104,7 @@ class App(tk.Frame):
         x2, y2 = polar2cartesian(throttle,angle)
         x2,y2 = y2+x1,y1-x2
 
-        self.canvas.create_line(x1, y1, x2, y2,  fill="blue", width = 2, arrow=tk.LAST)
+        self.canvas.create_line(x1, y1, x2, y2,  fill="red", width = 2, arrow=tk.LAST)
 
     def call_next_frame(self):
         increment = self.frame_increment.get()
@@ -201,23 +203,24 @@ if __name__ == '__main__':
         img_dir = 'data'
         #img_dir = input("dataset directory>")
 
-    img_dir = img_dir[:-1] if img_dir[-1] == '/' else img_dir # remove the last '/' character if present
-    dir_path,img_dir = os.path.split(img_dir)
+    img_dir = img_dir[:-1] if (img_dir[-1] == '/' or img_dir[-1] == '\\') else img_dir # remove the last '/' character if present
+    dir_path, img_dir = os.path.split(img_dir)
     os.chdir(dir_path)
-    fimage_names = glob.glob(img_dir + '/*[0-9]*.jpg')
-    fimage_names.sort(key=sort_key_fname_number)
+    #fimage_names = glob.glob(img_dir + '/*[0-9]*.jpg')
+    #fimage_names.sort(key=sort_key_fname_number)
 
     fimages_json = glob.glob(img_dir + '/record_[0-9]*.json')
     fimages_json.sort(key=sort_key_fname_number)
 
-    labels = load_labeldoc(img_dir+'_filter.csv', fimage_names)
+    labels = load_labeldoc(img_dir+'_filter.csv', fimages_json)
 
-    data = [list(d) for d in zip(fimage_names, labels, fimages_json)]
-    del fimage_names, labels
+    data = [list(d) for d in zip(fimages_json, labels)]
+    #del fimage_names, labels
+
     root = tk.Tk()
     root.geometry('400x300')
     root.resizable(0,0)
-    app = App(data=data,master=root)
+    app = App(data=(img_dir,data), master=root)
     app.master.title(__file__+" : "+img_dir)
     #mainmenu = tk.Menu(root)
     #mainmenu.add_command(label="Save (Ctrl+S)",command=save)
