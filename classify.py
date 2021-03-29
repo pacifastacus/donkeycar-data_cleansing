@@ -32,30 +32,38 @@ def polar2cartesian(length, angle):
 class App(tk.Frame):
     def __init__(self, master=None, data=None, saveCallback=None):
         tk.Frame.__init__(self, master)
-        self.saveCallback = saveCallback
-        self.frame_increment = tk.IntVar()
-        self.datadir, self.data = data
-        self.loaded_img = None
-        self.loaded_json = None
+        self.pack(**tk_pack_options)
+        # Internal variables
+        # GUI state vars
         self.img_class = tk.StringVar()
         self.img_class.trace_add('write', self.__refresh_label_color)
+        self.frame_increment = tk.IntVar()
         self.img_fname = tk.StringVar()
+        # Application state vars
+        self.loaded_img = None
+        self.loaded_json = None
+        self.datadir, self.data = data
+        self.FRAME_COUNT = findFirstNonClassified(self.data)
+        # End of Internal variables
+
+        self.saveCallback = saveCallback
         self.canvas = None
         self.class_label = None
         self.step_scale = None
-        self.FRAME_COUNT = findFirstNonClassified(self.data)
-        self.pack(**tk_pack_options)
 
+        # Image view panel
         img_frame = tk.Frame(self)
         img_frame.pack(side=tk.TOP,**tk_pack_options)
         self.canvas = tk.Canvas(img_frame, width=200, height=200, bg="green")
         fname_label = tk.Label(img_frame, textvariable=self.img_fname, relief=tk.RAISED)
         fname_label.pack()
         self.canvas.pack()
+        # End of Image view panel
 
+        # Control panel
         ctrl_frame = tk.Frame(self)
         ctrl_frame.pack(side=tk.BOTTOM,expand=1,fill=tk.X)
-
+        # labelling controls
         classify_frame = tk.Frame(ctrl_frame)
         classify_frame.pack(side=tk.LEFT,expand=1,fill=tk.Y)
         self.class_label = tk.Label(classify_frame, textvariable=self.img_class, relief=tk.SUNKEN)
@@ -66,8 +74,7 @@ class App(tk.Frame):
         unmark_button.pack(side=tk.BOTTOM)
         good_button.pack(side=tk.RIGHT, anchor=tk.W)
         bad_button.pack(side=tk.LEFT, anchor=tk.E)
-
-
+        # navigation controls
         nav_frame = tk.Frame(ctrl_frame)
         nav_frame.pack(side=tk.RIGHT,expand=1,fill=tk.Y)
         prev_button = tk.Button(nav_frame, text="<<", command=self.call_prev_frame)
@@ -77,8 +84,9 @@ class App(tk.Frame):
         self.step_scale.pack(side=tk.TOP,anchor=tk.CENTER)
         prev_button.pack(side=tk.LEFT,anchor=tk.E)
         next_button.pack(side=tk.RIGHT,anchor=tk.W)
+        # End of control panel
 
-
+        # Load the first image then fit the canvas to the image
         self.__show_frame()
         self.canvas.config(width=self.loaded_img.width(), height=self.loaded_img.height())
 
