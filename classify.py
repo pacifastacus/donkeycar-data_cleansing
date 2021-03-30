@@ -177,14 +177,26 @@ class App(tk.Frame):
 
     def mark_good(self):
         self.data[self.FRAME_COUNT][1] = 1
+        increment = self.frame_increment.get()
+        if increment > 1:
+            for i in range(self.FRAME_COUNT, self.FRAME_COUNT+increment):
+                self.data[i][1] = 1
         self.img_class.set(LABEL_MAP[1])
 
     def mark_bad(self):
         self.data[self.FRAME_COUNT][1] = 0
+        increment = self.frame_increment.get()
+        if increment > 1:
+            for i in range(self.FRAME_COUNT, self.FRAME_COUNT + increment):
+                self.data[i][1] = 0
         self.img_class.set(LABEL_MAP[0])
 
     def unmark(self):
         self.data[self.FRAME_COUNT][1] = 255
+        increment = self.frame_increment.get()
+        if increment > 1:
+            for i in range(self.FRAME_COUNT, self.FRAME_COUNT + increment):
+                self.data[i][1] = 255
         self.img_class.set(LABEL_MAP[255])
 
     def mod_increment(self, event):
