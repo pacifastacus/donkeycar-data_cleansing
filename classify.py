@@ -255,20 +255,23 @@ class App(tk.Frame):
 if __name__ == '__main__':
     import sys, os, glob
 
+    root = tk.Tk()
+    root.geometry('400x300')
+    root.resizable(0, 0)
     # Get list of images
     try:
         img_dir = sys.argv[1]  # 'test_data/img/'
     except IndexError:
-        img_dir = 'data'
+        img_dir = filedialog.askdirectory(mustexist=True, title="Select Directory")
+        img_dir = os.path.relpath(img_dir,os.getcwd())
+
+
 
     img_dir = img_dir[:-1] if (
                 img_dir[-1] == '/' or img_dir[-1] == '\\') else img_dir  # remove the last '/' character if present
     dir_path, img_dir = os.path.split(img_dir)
     os.chdir(dir_path)
 
-    root = tk.Tk()
-    root.geometry('400x300')
-    root.resizable(0, 0)
     app = App(master=root, directory=img_dir)
     app.master.title('Classify.py')
 
