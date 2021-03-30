@@ -2,11 +2,10 @@
 import math
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import messagebox
 import json
 import csv
 import os.path
-
-import numpy as np
 from PIL import Image, ImageTk
 
 WHEELS_TURNING_ANGLE = 45
@@ -139,9 +138,15 @@ class App(tk.Frame):
         increment = self.frame_increment.get()
         if increment < 1:
             increment = 1
+        old_frame_count = self.FRAME_COUNT
         self.FRAME_COUNT += increment
         if self.FRAME_COUNT >= len(self.data):
             self.FRAME_COUNT = 0
+#  TODO   BUG: If user sweep through the directory, the labelling will be rewritten. Find a better solution
+#        if increment >1:
+#            for i in range(old_frame_count,self.FRAME_COUNT):
+#                self.data[i][1] = self.data[old_frame_count][1]
+
         self.__show_frame()
 
     def call_prev_frame(self):
@@ -237,13 +242,12 @@ class App(tk.Frame):
     def open_dir(self):
         newdir = filedialog.askdirectory(mustexist=True, title="Select Directory")
         if (newdir):
+            # Save work
+            self.save_labeldoc()
 
             # go to the parent directory
             dir_path, dataset = os.path.split(newdir)
             os.chdir(dir_path)
-
-            # Save work
-            self.save_labeldoc()
 
             # Update internal vars
             self.datadir = dataset
@@ -263,6 +267,9 @@ if __name__ == '__main__':
         img_dir = sys.argv[1]  # 'test_data/img/'
     except IndexError:
         img_dir = filedialog.askdirectory(mustexist=True, title="Select Directory")
+        if not img_dir:
+            messagebox.showerror("Error!","Nothing selected! Quit")
+            quit(1)
         img_dir = os.path.relpath(img_dir,os.getcwd())
 
 
@@ -289,7 +296,7 @@ if __name__ == '__main__':
     app.bind("<Up>", app.mod_increment)
     app.bind("<Down>", app.mod_increment)
     app.bind("q", app.call_hotkey)
-    app.focus()
+    app.focus_force()
 
     app.mainloop()
     app.save_labeldoc()
