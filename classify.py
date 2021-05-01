@@ -2,11 +2,10 @@
 import math
 import tkinter as tk
 from tkinter import filedialog
+from tkinter import messagebox
 import json
 import csv
 import os.path
-
-import numpy as np
 from PIL import Image, ImageTk
 
 WHEELS_TURNING_ANGLE = 45
@@ -139,9 +138,15 @@ class App(tk.Frame):
         increment = self.frame_increment.get()
         if increment < 1:
             increment = 1
+        old_frame_count = self.FRAME_COUNT
         self.FRAME_COUNT += increment
         if self.FRAME_COUNT >= len(self.data):
             self.FRAME_COUNT = 0
+#  TODO   BUG: If user sweep through the directory, the labelling will be rewritten. Find a better solution
+#        if increment >1:
+#            for i in range(old_frame_count,self.FRAME_COUNT):
+#                self.data[i][1] = self.data[old_frame_count][1]
+
         self.__show_frame()
 
     def call_prev_frame(self):
@@ -172,14 +177,26 @@ class App(tk.Frame):
 
     def mark_good(self):
         self.data[self.FRAME_COUNT][1] = 1
+        increment = self.frame_increment.get()
+        if increment > 1:
+            for i in range(self.FRAME_COUNT, self.FRAME_COUNT+increment):
+                self.data[i][1] = 1
         self.img_class.set(LABEL_MAP[1])
 
     def mark_bad(self):
         self.data[self.FRAME_COUNT][1] = 0
+        increment = self.frame_increment.get()
+        if increment > 1:
+            for i in range(self.FRAME_COUNT, self.FRAME_COUNT + increment):
+                self.data[i][1] = 0
         self.img_class.set(LABEL_MAP[0])
 
     def unmark(self):
         self.data[self.FRAME_COUNT][1] = 255
+        increment = self.frame_increment.get()
+        if increment > 1:
+            for i in range(self.FRAME_COUNT, self.FRAME_COUNT + increment):
+                self.data[i][1] = 255
         self.img_class.set(LABEL_MAP[255])
 
     def mod_increment(self, event):
@@ -237,13 +254,12 @@ class App(tk.Frame):
     def open_dir(self):
         newdir = filedialog.askdirectory(mustexist=True, title="Select Directory")
         if (newdir):
+            # Save work
+            self.save_labeldoc()
 
             # go to the parent directory
             dir_path, dataset = os.path.split(newdir)
             os.chdir(dir_path)
-
-            # Save work
-            self.save_labeldoc()
 
             # Update internal vars
             self.datadir = dataset
@@ -255,20 +271,26 @@ class App(tk.Frame):
 if __name__ == '__main__':
     import sys, os, glob
 
+    root = tk.Tk()
+    root.geometry('400x300')
+    root.resizable(0, 0)
     # Get list of images
     try:
         img_dir = sys.argv[1]  # 'test_data/img/'
     except IndexError:
-        img_dir = 'data'
+        img_dir = filedialog.askdirectory(mustexist=True, title="Select Directory")
+        if not img_dir:
+            messagebox.showerror("Error!","Nothing selected! Quit")
+            quit(1)
+        img_dir = os.path.relpath(img_dir,os.getcwd())
+
+
 
     img_dir = img_dir[:-1] if (
                 img_dir[-1] == '/' or img_dir[-1] == '\\') else img_dir  # remove the last '/' character if present
     dir_path, img_dir = os.path.split(img_dir)
     os.chdir(dir_path)
 
-    root = tk.Tk()
-    root.geometry('400x300')
-    root.resizable(0, 0)
     app = App(master=root, directory=img_dir)
     app.master.title('Classify.py')
 
@@ -286,7 +308,7 @@ if __name__ == '__main__':
     app.bind("<Up>", app.mod_increment)
     app.bind("<Down>", app.mod_increment)
     app.bind("q", app.call_hotkey)
-    app.focus()
+    app.focus_force()
 
     app.mainloop()
     app.save_labeldoc()
