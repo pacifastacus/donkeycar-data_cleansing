@@ -11,12 +11,17 @@ from PIL import Image, ImageTk
 WHEELS_TURNING_ANGLE = 45
 THROTTLE_MAX_RADIUS = 120
 
-LABEL_MAP = {0: "Straight",
+LABEL_MAP = {2: "Straight",
              1: "Left",
-             2: "Right",
-             3: "LeftLeft",
+             3: "Right",
+             0: "LeftLeft",
              4: "RightRight",
              255: "Unlabelled"}
+#Inverse mapping
+LABEL_MAP_INV = {}
+for k,v in LABEL_MAP.items():
+    LABEL_MAP_INV[v] = k
+
 tk_pack_options = {"expand": 1, "fill": tk.BOTH}
 
 
@@ -80,9 +85,19 @@ class App(tk.Frame):
         classify_frame = tk.Frame(ctrl_frame)
         classify_frame.pack(side=tk.LEFT, expand=1, fill=tk.Y)
         self.class_label = tk.Label(classify_frame, textvariable=self.img_class, relief=tk.SUNKEN)
-        unmark_button = tk.Button(classify_frame, text="Unlabel (Del)", command=self.unmark)
-        self.class_label.pack(side=tk.TOP, anchor=tk.CENTER)
-        unmark_button.pack(side=tk.BOTTOM)
+        straight_button = tk.Button(classify_frame, text="Straight (2)", command=self.mark_straight)
+        unmark_button = tk.Button(classify_frame,text="Unlabel (Del)",command=self.unmark)
+        left_button = tk.Button(classify_frame, text="Left (1)", command=self.mark_left)
+        right_button = tk.Button(classify_frame, text="Right (3)", command=self.mark_right)
+        leftleft_button = tk.Button(classify_frame, text="LeftLeft (0)", command=self.mark_leftleft)
+        rightright_button = tk.Button(classify_frame, text="RightRight (4)", command=self.mark_rightright)
+        self.class_label.grid(row=0, column=0)
+        unmark_button.grid(row=0, column=1)
+        straight_button.grid(row=1, column=0, columnspan=2)
+        left_button.grid(row=2, column=0)
+        leftleft_button.grid(row=3, column=0)
+        right_button.grid(row=2, column=1)
+        rightright_button.grid(row=3, column=1)
         # navigation controls
         nav_frame = tk.Frame(ctrl_frame)
         nav_frame.pack(side=tk.RIGHT, expand=1, fill=tk.Y)
@@ -96,23 +111,6 @@ class App(tk.Frame):
         # End of control panel
 
         # Load the first image then fit the canvas to the image
-        self.step_scale.pack(side=tk.TOP,anchor=tk.CENTER)
-        prev_button.pack(side=tk.LEFT,anchor=tk.E)
-        next_button.pack(side=tk.RIGHT,anchor=tk.W)
-        self.class_label = tk.Label(classify_frame, textvariable=self.img_class, relief=tk.SUNKEN)
-        straight_button = tk.Button(classify_frame, text="Straight (0)", command=self.mark_straight)
-        unmark_button = tk.Button(classify_frame,text="Unlabel (Del)",command=self.unmark)
-        left_button = tk.Button(classify_frame, text="Left (1)", command=self.mark_left)
-        right_button = tk.Button(classify_frame, text="Right (2)", command=self.mark_right)
-        leftleft_button = tk.Button(classify_frame, text="LeftLeft (3)", command=self.mark_leftleft)
-        rightright_button = tk.Button(classify_frame, text="RightRight (4)", command=self.mark_rightright)
-        self.class_label.pack(side=tk.TOP,anchor=tk.CENTER)
-        unmark_button.pack(side=tk.BOTTOM)
-        straight_button.pack(side=tk.BOTTOM)
-        left_button.pack(side=tk.LEFT,anchor=tk.E)
-        leftleft_button.pack(side=tk.LEFT)
-        right_button.pack(side=tk.RIGHT, anchor=tk.W)
-        rightright_button.pack(side=tk.RIGHT)
         self.__show_frame()
         self.canvas.config(width=self.loaded_img.width(), height=self.loaded_img.height())
 
@@ -131,9 +129,16 @@ class App(tk.Frame):
             self.loaded_json = json.load(f)
 
     def __refresh_label_color(self, var, indx, mode):
+        color_map = {
+            "straight" : "white",
+            "left" : "red",
+            "leftleft" : "red",
+            "right" : "blue",
+            "rightright":"blue",
+            "unlabelled":"yellow"
+        }
         label = self.img_class.get().lower()
-        color = "red" if label == "bad" else "green" if label == "good" else "yellow"
-        self.class_label.configure(bg=color)
+        self.class_label.configure(bg=color_map[label])
 
     def __show_frame(self):
         # global lmain
@@ -177,10 +182,10 @@ class App(tk.Frame):
     def call_hotkey(self, event):
         key = event.keysym
         switch = {
-            "0": self.mark_straight,
+            "2": self.mark_straight,
             "1": self.mark_left,
-            "2": self.mark_right,
-            "3": self.mark_leftleft,
+            "3": self.mark_right,
+            "0": self.mark_leftleft,
             "4": self.mark_rightright,
             "Delete": self.unmark,
             "Left": self.call_prev_frame,
@@ -189,7 +194,7 @@ class App(tk.Frame):
         }
         try:
             switch[key]()
-            if key in ["0", "1", "Delete"]:
+            if key in ["0", "1", "2", "3", "4", "Delete"]:
                 self.call_next_frame()
         except ValueError:
             return
@@ -203,22 +208,22 @@ class App(tk.Frame):
         self.img_class.set(LABEL_MAP[label])
 
     def mark_straight(self):
-        self.__mark(0)
+        self.__mark(LABEL_MAP_INV["Straight"])
 
     def mark_left(self):
-        self.__mark(1)
+        self.__mark(LABEL_MAP_INV["Left"])
 
     def mark_right(self):
-        self.__mark(2)
+        self.__mark(LABEL_MAP_INV["Right"])
 
     def mark_leftleft(self):
-        self.__mark(3)
+        self.__mark(LABEL_MAP_INV["LeftLeft"])
 
     def mark_rightright(self):
-        self.__mark(4)
+        self.__mark(LABEL_MAP_INV["RightRight"])
 
     def unmark(self):
-        self.__mark(255)
+        self.__mark(LABEL_MAP_INV["Unlabelled"])
 
     def mod_increment(self, event):
         inc = self.frame_increment.get()
@@ -294,7 +299,7 @@ if __name__ == '__main__':
 
     root = tk.Tk()
     root.geometry('400x300')
-    root.resizable(0, 0)
+    root.resizable(1, 1)
     # Get list of images
     try:
         img_dir = sys.argv[1]  # 'test_data/img/'
@@ -321,6 +326,9 @@ if __name__ == '__main__':
     mainmenu.add_command(label="Quit (q)", command=app.quit)
     root.config(menu=mainmenu)
 
+    app.bind("4", app.call_hotkey)
+    app.bind("3", app.call_hotkey)
+    app.bind("2", app.call_hotkey)
     app.bind("1", app.call_hotkey)
     app.bind("0", app.call_hotkey)
     app.bind("<Delete>", app.call_hotkey)
