@@ -8,6 +8,8 @@ import csv
 import os.path
 from PIL import Image, ImageTk
 
+from AppFrames import ImageFrame, ControlFrame
+
 WHEELS_TURNING_ANGLE = 45
 THROTTLE_MAX_RADIUS = 120
 
@@ -45,60 +47,33 @@ class App(tk.Frame):
         self.pack(**tk_pack_options)
         # Internal variables
         # GUI state vars
-        self.img_class = tk.StringVar()
-        self.img_class.trace_add('write', self.__refresh_label_color)
-        self.frame_increment = tk.IntVar()
-        self.img_fname = tk.StringVar()
+
+
         # Application state vars
-        self.loaded_img = None
         self.loaded_json = None
         self.datadir = directory
         self.data = self.load_labeldoc(directory + '_filter.csv')
         self.FRAME_COUNT = findFirstNonClassified(self.data)
         # End of Internal variables
 
-        self.canvas = None
-        self.class_label = None
-        self.step_scale = None
 
         # Image view panel
-        img_frame = tk.Frame(self)
-        img_frame.pack(side=tk.TOP, **tk_pack_options)
-        self.canvas = tk.Canvas(img_frame, width=200, height=200, bg="green")
-        fname_label = tk.Label(img_frame, textvariable=self.img_fname, relief=tk.RAISED)
-        fname_label.pack()
-        self.canvas.pack()
+        self.img_frame = ImageFrame(self)
+        self.img_frame.pack(side=tk.TOP, **tk_pack_options)
         # End of Image view panel
 
         # Control panel
-        ctrl_frame = tk.Frame(self)
-        ctrl_frame.pack(side=tk.BOTTOM, expand=1, fill=tk.X)
-        # labelling controls
-        classify_frame = tk.Frame(ctrl_frame)
-        classify_frame.pack(side=tk.LEFT, expand=1, fill=tk.Y)
-        self.class_label = tk.Label(classify_frame, textvariable=self.img_class, relief=tk.SUNKEN)
-        good_button = tk.Button(classify_frame, text="Good (1)", command=self.mark_good)
-        unmark_button = tk.Button(classify_frame, text="Unlabel (Del)", command=self.unmark)
-        bad_button = tk.Button(classify_frame, text="Bad (0)", command=self.mark_bad)
-        self.class_label.pack(side=tk.TOP, anchor=tk.CENTER)
-        unmark_button.pack(side=tk.BOTTOM)
-        good_button.pack(side=tk.RIGHT, anchor=tk.W)
-        bad_button.pack(side=tk.LEFT, anchor=tk.E)
-        # navigation controls
-        nav_frame = tk.Frame(ctrl_frame)
-        nav_frame.pack(side=tk.RIGHT, expand=1, fill=tk.Y)
-        prev_button = tk.Button(nav_frame, text="<<", command=self.call_prev_frame)
-        next_button = tk.Button(nav_frame, text=">>", command=self.call_next_frame)
-        self.step_scale = tk.Scale(nav_frame, label="step increment", orient=tk.HORIZONTAL,
-                                   from_=1, to=100, resolution=1, variable=self.frame_increment)
-        self.step_scale.pack(side=tk.TOP, anchor=tk.CENTER)
-        prev_button.pack(side=tk.LEFT, anchor=tk.E)
-        next_button.pack(side=tk.RIGHT, anchor=tk.W)
+        self.ctrl_frame = ControlFrame(self)
+        self.ctrl_frame.pack(side=tk.BOTTOM, expand=1, fill=tk.X)
+        self.ctrl_frame.classify_frame.good_button.bind("<Button>",self.mark_good())
+        self.ctrl_frame.classify_frame.bad_button.bind("<Button>", self.mark_bad())
+        self.ctrl_frame.classify_frame.unmark_button.bind("<Button>", self.unmark())
+
         # End of control panel
 
         # Load the first image then fit the canvas to the image
         self.__show_frame()
-        self.canvas.config(width=self.loaded_img.width(), height=self.loaded_img.height())
+        self.img_frame.canvas.config(width=self.loaded_img.width(), height=self.loaded_img.height())
 
     def __del__(self):
         self.save_labeldoc()
@@ -107,24 +82,20 @@ class App(tk.Frame):
         # fname = self.data[self.FRAME_COUNT][0]
         fname = os.path.join(self.datadir, self.loaded_json["cam/image_array"])
         self.loaded_img = ImageTk.PhotoImage(Image.open(fname, "r"))
-        self.img_fname.set(fname)
+        self.img_frame.img_fname.set(fname)
 
     def __load_json(self):
         fname = self.data[self.FRAME_COUNT][0]
         with open(fname) as f:
             self.loaded_json = json.load(f)
 
-    def __refresh_label_color(self, var, indx, mode):
-        label = self.img_class.get().lower()
-        color = "red" if label == "bad" else "green" if label == "good" else "yellow"
-        self.class_label.configure(bg=color)
 
     def __show_frame(self):
         # global lmain
         self.__load_json()
         self.__load_image()
-        self.img_class.set(LABEL_MAP[self.data[self.FRAME_COUNT][1]])
-        self.canvas.create_image(0, 0, anchor='nw', image=self.loaded_img)
+        self.ctrl_frame.classify_frame.img_class.set(LABEL_MAP[self.data[self.FRAME_COUNT][1]])
+        self.img_frame.canvas.create_image(0, 0, anchor='nw', image=self.loaded_img)
         x1 = 80
         y1 = 120
         throttle = self.loaded_json["user/throttle"] * THROTTLE_MAX_RADIUS
@@ -132,31 +103,8 @@ class App(tk.Frame):
         x2, y2 = polar2cartesian(throttle, angle)
         x2, y2 = y2 + x1, y1 - x2
 
-        self.canvas.create_line(x1, y1, x2, y2, fill="red", width=2, arrow=tk.LAST)
+        self.img_frame.canvas.create_line(x1, y1, x2, y2, fill="red", width=2, arrow=tk.LAST)
 
-    def call_next_frame(self):
-        increment = self.frame_increment.get()
-        if increment < 1:
-            increment = 1
-        old_frame_count = self.FRAME_COUNT
-        self.FRAME_COUNT += increment
-        if self.FRAME_COUNT >= len(self.data):
-            self.FRAME_COUNT = 0
-#  TODO   BUG: If user sweep through the directory, the labelling will be rewritten. Find a better solution
-#        if increment >1:
-#            for i in range(old_frame_count,self.FRAME_COUNT):
-#                self.data[i][1] = self.data[old_frame_count][1]
-
-        self.__show_frame()
-
-    def call_prev_frame(self):
-        increment = self.frame_increment.get()
-        if increment < 1:
-            increment = 1
-        self.FRAME_COUNT -= increment
-        if self.FRAME_COUNT < 0:
-            FRAME_COUNT = len(self.data)
-        self.__show_frame()
 
     def call_hotkey(self, event):
         key = event.keysym
@@ -164,50 +112,41 @@ class App(tk.Frame):
             "0": self.mark_bad,
             "1": self.mark_good,
             "Delete": self.unmark,
-            "Left": self.call_prev_frame,
-            "Right": self.call_next_frame,
+            "Left": self.ctrl_frame.nav_frame.call_prev_frame,
+            "Right": self.ctrl_frame.nav_frame.call_next_frame,
             "q": self.quit
         }
         try:
             switch[key]()
             if key in ["0", "1", "Delete"]:
-                self.call_next_frame()
+                self.ctrl_frame.nav_frame.call_next_frame()
         except ValueError:
             return
 
     def mark_good(self):
         self.data[self.FRAME_COUNT][1] = 1
-        increment = self.frame_increment.get()
+        increment = self.ctrl_frame.nav_frame.frame_increment.get()
         if increment > 1:
             for i in range(self.FRAME_COUNT, self.FRAME_COUNT+increment):
                 self.data[i][1] = 1
-        self.img_class.set(LABEL_MAP[1])
+        self.ctrl_frame.classify_frame.img_class.set(LABEL_MAP[1])
 
     def mark_bad(self):
         self.data[self.FRAME_COUNT][1] = 0
-        increment = self.frame_increment.get()
+        increment = self.ctrl_frame.nav_frame.frame_increment.get()
         if increment > 1:
             for i in range(self.FRAME_COUNT, self.FRAME_COUNT + increment):
                 self.data[i][1] = 0
-        self.img_class.set(LABEL_MAP[0])
+        self.ctrl_frame.classify_frame.img_class.set(LABEL_MAP[0])
 
     def unmark(self):
         self.data[self.FRAME_COUNT][1] = 255
-        increment = self.frame_increment.get()
+        increment = self.ctrl_frame.nav_frame.frame_increment.get()
         if increment > 1:
             for i in range(self.FRAME_COUNT, self.FRAME_COUNT + increment):
                 self.data[i][1] = 255
-        self.img_class.set(LABEL_MAP[255])
+        self.ctrl_frame.classify_frame.img_class.set(LABEL_MAP[255])
 
-    def mod_increment(self, event):
-        inc = self.frame_increment.get()
-        res = self.step_scale.config()['resolution'][4]
-        if event.keysym == "Up":
-            self.frame_increment.set(inc + res)
-        elif event.keysym == "Down":
-            self.frame_increment.set(inc - res)
-        else:
-            raise Exception()
 
     #    @staticmethod
     #    def load_labeldoc(self, docpath, fimagelist):
@@ -305,8 +244,8 @@ if __name__ == '__main__':
     app.bind("<Delete>", app.call_hotkey)
     app.bind("<Left>", app.call_hotkey)
     app.bind("<Right>", app.call_hotkey)
-    app.bind("<Up>", app.mod_increment)
-    app.bind("<Down>", app.mod_increment)
+    app.bind("<Up>", app.ctrl_frame.nav_frame.mod_increment)
+    app.bind("<Down>", app.ctrl_frame.nav_frame.mod_increment)
     app.bind("q", app.call_hotkey)
     app.focus_force()
 
