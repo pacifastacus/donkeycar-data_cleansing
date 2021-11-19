@@ -17,15 +17,24 @@ LABEL_MAP = {0: "Bad",
 tk_pack_options = {"expand": 1, "fill": tk.BOTH}
 
 
-def sort_key_fname_number(e):
-    import re
-    e = os.path.basename(e)
-    match = re.search('([^0-9]*)([0-9]+)(.*)', e)
-    num = int(match[2])
-    return num
+def merge_catalogs(datadir :str) -> list:
+    catalog = []
+    catalog_file_names = []
+    with open(os.path.join(datadir,"manifest.json"),'r') as man_fp:
+        for line in man_fp:
+            line = json.loads(line)
+            if type(line) is dict:
+                catalog_file_names = line.get("paths")
+    for cat_file in catalog_file_names:
+        with open(os.path.join(datadir,cat_file),'r') as catalog_fp:
+            for i,record in enumerate(catalog_fp):
+                catalog.append(json.loads(record))
+    for i,record in enumerate(catalog):
+        assert i == record["_index"]
+    return catalog
 
 
-def findFirstNonClassified(data):
+def find_first_non_classified(data):
     for i, rec in enumerate(data):
         if rec[1] == 255:
             return i
@@ -51,10 +60,11 @@ class App(tk.Frame):
         self.img_fname = tk.StringVar()
         # Application state vars
         self.loaded_img = None
-        self.loaded_json = None
+        self.catalog = merge_catalogs(directory)
         self.datadir = directory
-        self.data = self.load_labeldoc(directory + '_filter.csv')
-        self.FRAME_COUNT = findFirstNonClassified(self.data)
+        self.data = self.load_labeldoc(directory)
+        self.FRAME_COUNT = find_first_non_classified(self.data)
+        self.loaded_record = self.catalog[self.FRAME_COUNT]
         # End of Internal variables
 
         self.canvas = None
@@ -105,14 +115,9 @@ class App(tk.Frame):
 
     def __load_image(self):
         # fname = self.data[self.FRAME_COUNT][0]
-        fname = os.path.join(self.datadir, self.loaded_json["cam/image_array"])
+        fname = os.path.join(self.datadir, "images", self.loaded_record["cam/image_array"])
         self.loaded_img = ImageTk.PhotoImage(Image.open(fname, "r"))
         self.img_fname.set(fname)
-
-    def __load_json(self):
-        fname = self.data[self.FRAME_COUNT][0]
-        with open(fname) as f:
-            self.loaded_json = json.load(f)
 
     def __refresh_label_color(self, var, indx, mode):
         label = self.img_class.get().lower()
@@ -121,14 +126,14 @@ class App(tk.Frame):
 
     def __show_frame(self):
         # global lmain
-        self.__load_json()
+        self.loaded_record = self.catalog[self.FRAME_COUNT]
         self.__load_image()
         self.img_class.set(LABEL_MAP[self.data[self.FRAME_COUNT][1]])
         self.canvas.create_image(0, 0, anchor='nw', image=self.loaded_img)
-        x1 = 80
-        y1 = 120
-        throttle = self.loaded_json["user/throttle"] * THROTTLE_MAX_RADIUS
-        angle = self.loaded_json["user/angle"] * WHEELS_TURNING_ANGLE
+        x1 = self.loaded_img.width()/2.0
+        y1 = self.loaded_img.height()
+        throttle = self.loaded_record["user/throttle"] * THROTTLE_MAX_RADIUS
+        angle = self.loaded_record["user/angle"] * WHEELS_TURNING_ANGLE
         x2, y2 = polar2cartesian(throttle, angle)
         x2, y2 = y2 + x1, y1 - x2
 
@@ -223,30 +228,29 @@ class App(tk.Frame):
     #        return labels_
 
     @staticmethod
-    def load_labeldoc(docpath):
+    def load_labeldoc(directory):
+        record_id = []
         labels_ = []
-        json_files = []
         try:
-            doc = open(docpath, "r")
+            doc = open(directory+"_filter.csv", "r")
             reader = csv.reader(doc, delimiter=",")
             next(reader, None)
             for row in reader:
-                json_files.append(row[0])
+                record_id.append(row[0])
                 labels_.append(int(row[1]))
             doc.close()
         except FileNotFoundError:
-            json_files = glob.glob(img_dir + '/record_[0-9]*.json')
-            json_files.sort(key=sort_key_fname_number)
+            record_id = list(range(len(merge_catalogs(directory))))
             labels_ = [list(LABEL_MAP.keys())[list(LABEL_MAP.values()).index("Unlabelled")]]
-            labels_ *= len(json_files)
+            labels_ *= len(record_id)
 
-        return [list(d) for d in zip(json_files, labels_)]
+        return [list(d) for d in zip(record_id, labels_)]
 
     def save_labeldoc(self, docpath=None):
         if not docpath:
             docpath = self.datadir + '_filter.csv'
         doc = open(docpath, "w")
-        print("IMAGE FILE,CLASS", file=doc)
+        print("RECORD,CLASS", file=doc)
         for entry in self.data:
             print("{},{}".format(entry[0], entry[1]), file=doc)
         doc.close()
@@ -263,8 +267,8 @@ class App(tk.Frame):
 
             # Update internal vars
             self.datadir = dataset
-            self.data = self.load_labeldoc(self.datadir + '_filter.csv')
-            self.FRAME_COUNT = findFirstNonClassified(self.data)
+            self.data = self.load_labeldoc(self.datadir)
+            self.FRAME_COUNT = find_first_non_classified(self.data)
             self.__show_frame()
 
 
@@ -272,7 +276,7 @@ if __name__ == '__main__':
     import sys, os, glob
 
     root = tk.Tk()
-    root.geometry('400x300')
+    root.geometry('640x480')
     root.resizable(0, 0)
     # Get list of images
     try:
